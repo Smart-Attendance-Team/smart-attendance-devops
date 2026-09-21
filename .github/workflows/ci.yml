@@ -1,0 +1,34 @@
+name: DevOps CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - "devops/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Validate DevOps configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required directories
+        shell: bash
+        run: |
+          required_directories=("docker" "monitoring" "backups" "docs")
+          for directory in "${required_directories[@]}"; do
+            if [ ! -d "$directory" ]; then
+              echo "Missing required directory: $directory"
+              exit 1
+            fi
+          done
+
+      - name: Validate Docker Compose
+        run: docker compose --env-file .env.example -f docker/docker-compose.yml config --quiet
