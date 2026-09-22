@@ -22,3 +22,5 @@ volumes/
 node_modules/
 coverage/
 dist/
+# Local database backup files
+backups/dumps/
