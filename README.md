@@ -1,50 +1,39 @@
 # Smart Attendance - DevOps
 
-Docker and infrastructure setup for Smart Attendance.
+DevOps infrastructure and deployment foundation for the Smart Attendance platform.
 
-## Current status
+## Overview
 
-- PostgreSQL 16 is running locally and its health check passes.
-- GitHub Actions validation is configured but not yet tested on GitHub.
-- Backend, frontend, and AI integration is pending.
-- Monitoring and backups currently have placeholder folders only.
-- Database tables and seed data await the agreed backend schema.
+This repository contains the DevOps setup for the Smart Attendance system, including Docker infrastructure, CI validation, monitoring checks, and database backup procedures.
 
-## Requirements
+## Current Status
 
-- Git
-- Docker Desktop with Docker Compose
+- PostgreSQL 16 container is configured and running locally.
+- Docker Compose configuration is available for database infrastructure.
+- GitHub Actions CI pipeline is configured and validated through pull requests.
+- Database health checks are implemented.
+- Database backup scripts and configuration management are implemented.
+- Backend, frontend, and AI service integration will be added when application services are connected.
 
-## Local setup
+## Repository Structure
 
-Run these commands from the repository root in PowerShell.
+```text
+smart-attendance-devops
 
-Only if .env does not already exist:
-    Copy-Item .env.example .env
+.github/
+└── workflows/
+    └── ci.yml
 
-Start the database:
-    docker compose --env-file .env -f docker/docker-compose.yml up -d
+docker/
+└── docker-compose.yml
 
-Check container health:
-    docker compose --env-file .env -f docker/docker-compose.yml ps
+monitoring/
+├── health-check.ps1
+└── README.md
 
-Stop services without deleting the database volume:
-    docker compose --env-file .env -f docker/docker-compose.yml down
+backups/
+├── backup.ps1
+├── backup-config.env.example
+└── README.md
 
-## Database connection
-
-From your computer:
-- Host: localhost
-- Port: 5433 by default, configurable through POSTGRES_PORT
-- Database: attendance
-- User: attendance_user
-- Password: the value in your local .env file
-
-From a backend container on the same Compose network:
-- Host: db
-- Port: 5432
-
-## Security
-
-Never commit .env or real credentials.
-The example password is for local development only.
+docs/
