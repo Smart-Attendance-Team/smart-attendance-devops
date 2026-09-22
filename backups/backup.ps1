@@ -3,17 +3,35 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $repoRoot ".env"
 $composeFile = Join-Path $repoRoot "docker\docker-compose.yml"
-$backupDir = Join-Path $PSScriptRoot "dumps"
+$configFile = Join-Path $PSScriptRoot "backup-config.env.example"
 
 if (-not (Test-Path $envFile)) {
     throw "Missing .env file."
 }
 
+if (-not (Test-Path $configFile)) {
+    throw "Missing backup configuration file."
+}
+
+$config = @{}
+
+Get-Content $configFile | ForEach-Object {
+    if ($_ -match "^([^#=]+)=(.*)$") {
+        $config[$matches[1].Trim()] = $matches[2].Trim()
+    }
+}
+
+$backupDir = Join-Path $repoRoot $config["BACKUP_DIR"]
+$retentionDays = [int]$config["RETENTION_DAYS"]
+$databaseService = $config["DATABASE_SERVICE"]
+
 New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$uniqueId = [guid]::NewGuid().ToString("N").Substring(0, 8)
+$uniqueId = [guid]::NewGuid().ToString("N").Substring(0,8)
+
 $fileName = "attendance-$timestamp-$uniqueId.dump"
+
 $containerFile = "/tmp/$fileName"
 $localFile = Join-Path $backupDir $fileName
 $partialFile = "$localFile.partial"
@@ -25,30 +43,42 @@ $composeArgs = @(
 )
 
 try {
+
     Write-Host "Creating database backup..."
 
-    docker @composeArgs exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f "$1"' sh $containerFile
+    docker @composeArgs exec -T $databaseService sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f "$1"' sh $containerFile
+
     if ($LASTEXITCODE -ne 0) {
         throw "Database backup failed."
     }
 
-    docker @composeArgs cp "db:$containerFile" $partialFile
+    docker @composeArgs cp "$databaseService:$containerFile" $partialFile
+
     if ($LASTEXITCODE -ne 0) {
-        throw "Copying the backup to your computer failed."
+        throw "Copy backup failed."
     }
 
     if ((Get-Item $partialFile).Length -eq 0) {
-        throw "The backup file is empty."
+        throw "Backup file is empty."
     }
 
-    Move-Item -LiteralPath $partialFile -Destination $localFile
+    Move-Item $partialFile $localFile
 
-    Write-Host "Backup saved successfully:"
+    Write-Host "Backup saved:"
     Write-Host $localFile
+
+
+    Write-Host "Cleaning old backups..."
+
+    Get-ChildItem $backupDir -Filter "*.dump" |
+    Where-Object {
+        $_.LastWriteTime -lt (Get-Date).AddDays(-$retentionDays)
+    } |
+    Remove-Item -Force
+
 }
 finally {
-    docker @composeArgs exec -T db rm -f $containerFile
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Could not remove the temporary backup inside the container."
-    }
+
+    docker @composeArgs exec -T $databaseService rm -f $containerFile
+
 }
