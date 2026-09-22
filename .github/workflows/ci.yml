@@ -10,10 +10,14 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   validate:
-    name: Validate DevOps configuration
+    name: Validate configuration and test database
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -22,8 +26,7 @@ jobs:
       - name: Check required directories
         shell: bash
         run: |
-          required_directories=("docker" "monitoring" "backups" "docs")
-          for directory in "${required_directories[@]}"; do
+          for directory in docker monitoring backups docs; do
             if [ ! -d "$directory" ]; then
               echo "Missing required directory: $directory"
               exit 1
@@ -32,3 +35,24 @@ jobs:
 
       - name: Validate Docker Compose
         run: docker compose --env-file .env.example -f docker/docker-compose.yml config --quiet
+
+      - name: Start PostgreSQL and wait for health
+        run: docker compose --env-file .env.example -f docker/docker-compose.yml up -d --wait --wait-timeout 120 db
+
+      - name: Test database query
+        shell: bash
+        run: |
+          result=$(docker compose --env-file .env.example -f docker/docker-compose.yml exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atc "SELECT 1;"')
+          if [ "$result" != "1" ]; then
+            echo "Database query did not return the expected result."
+            exit 1
+          fi
+          echo "Database query passed."
+
+      - name: Show database logs on failure
+        if: failure()
+        run: docker compose --env-file .env.example -f docker/docker-compose.yml logs --no-color --tail 100 db
+
+      - name: Clean up CI database
+        if: always()
+        run: docker compose --env-file .env.example -f docker/docker-compose.yml down --volumes --remove-orphans
