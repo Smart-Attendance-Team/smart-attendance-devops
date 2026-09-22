@@ -52,7 +52,7 @@ try {
         throw "Database backup failed."
     }
 
-    docker @composeArgs cp "$databaseService:$containerFile" $partialFile
+    docker @composeArgs cp "${databaseService}:$containerFile" $partialFile
 
     if ($LASTEXITCODE -ne 0) {
         throw "Copy backup failed."
